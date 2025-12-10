@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>FanControl.Liquidctl</RootNamespace>
     <AssemblyName>FanControl.Liquidctl</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkVersion>net9.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
@@ -32,10 +32,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="FanControl.Plugins">
-      <HintPath>..\..\..\..\Documents\FanControl\FanControl.Plugins.dll</HintPath>
+      <HintPath>include\FanControl.Plugins.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\..\..\Documents\FanControl\Newtonsoft.Json.dll</HintPath>
+      <HintPath>include\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
