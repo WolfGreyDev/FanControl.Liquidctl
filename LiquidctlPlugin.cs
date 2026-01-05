@@ -30,6 +30,8 @@ namespace FanControl.Liquidctl
             foreach (LiquidctlStatusJSON liquidctl in input)
             {
                 LiquidctlDevice device = new LiquidctlDevice(liquidctl);
+                if (!device.HasAnySensors) continue;
+
                 if (device.hasPumpSpeed)
                     _container.FanSensors.Add(device.pumpSpeed);
                 if (device.hasPumpDuty)
