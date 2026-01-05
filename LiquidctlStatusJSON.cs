@@ -8,10 +8,12 @@ namespace FanControl.Liquidctl
         public class StatusRecord
         {
             public string key { get; set; }
-            public string value { get; set; }
+            // public string value { get; set; }
+            public dynamic value { get; set; }
             public string unit { get; set; }
 
-            public float? GetValueAsFloat() {
+            public float? GetValueAsFloat()
+            {
                 if (float.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float valueAsFloat))
                     return valueAsFloat;
                 return null;
@@ -25,13 +27,15 @@ namespace FanControl.Liquidctl
 
         public List<StatusRecord> status { get; set; }
 
-        public string GetAddress() {
+        public string GetAddress()
+        {
             if (bus.StartsWith("usb"))
                 return $"usb#{port}";
             return address;
         }
 
-        public static KeyValuePair<string, string> GetBusAndAddress(string address) {
+        public static KeyValuePair<string, string> GetBusAndAddress(string address)
+        {
             if (address.StartsWith("usb#"))
                 return new KeyValuePair<string, string>("usb", address.Split('#')[1]);
             return new KeyValuePair<string, string>("hid", address);
