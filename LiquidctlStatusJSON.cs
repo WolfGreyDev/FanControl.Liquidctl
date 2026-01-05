@@ -7,25 +7,28 @@ namespace FanControl.Liquidctl
     {
         public class StatusRecord
         {
-            public string key { get; set; }
-            // public string value { get; set; }
-            public dynamic value { get; set; }
-            public string unit { get; set; }
+            public string key { get; set; } = null!;
+            public string? description { get; set; }
+            public object value { get; set; } = null!;
+            public string unit { get; set; } = null!;
 
             public float? GetValueAsFloat()
             {
-                if (float.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float valueAsFloat))
-                    return valueAsFloat;
+                if (value is float f) return f;
+                if (value is double d) return (float)d;
+                if (value is int i) return (float)i;
+                if (value is long l) return (float)l;
+                if (value is string s && float.TryParse(s, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out float result)) return result;
                 return null;
             }
         }
-        public string bus { get; set; }
-        public string address { get; set; }
-        public string port { get; set; }
+        public string bus { get; set; } = null!;
+        public string address { get; set; } = null!;
+        public string port { get; set; } = null!;
+        public string? version { get; set; }
+        public string description { get; set; } = null!;
 
-        public string description { get; set; }
-
-        public List<StatusRecord> status { get; set; }
+        public List<StatusRecord> status { get; set; } = null!;
 
         public string GetAddress()
         {

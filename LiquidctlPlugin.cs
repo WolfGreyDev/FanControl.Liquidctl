@@ -11,14 +11,19 @@ namespace FanControl.Liquidctl
     {
         internal List<LiquidctlDevice> devices = new List<LiquidctlDevice>();
 
+        private IPluginLogger? _logger;
+
+        public LiquidctlPlugin(IPluginLogger logger)
+        {
+            _logger = logger;
+        }
+
         public string Name => "LiquidctlPlugin";
 
         public void Initialize()
         {
-
-            LiquidctlCLIWrapper.Initialize();
-            LiquidctlCLIWrapper.Initialize(logger);
-
+            LiquidctlCLIWrapper.Initialize(_logger);
+        }
         public void Load(IPluginSensorsContainer _container)
         {
             List<LiquidctlStatusJSON> input = LiquidctlCLIWrapper.ReadStatus();
@@ -32,11 +37,6 @@ namespace FanControl.Liquidctl
                 if (device.hasLiquidTemperature)
                     _container.TempSensors.Add(device.liquidTemperature);
 
-                if (device.hasFanSpeed)
-                {
-                    _container.FanSensors.Add(device.fanSpeed);
-                    _container.ControlSensors.Add(device.fanControl);
-                }
 
                 for (int i = 0; i < 20; i++)
                 {

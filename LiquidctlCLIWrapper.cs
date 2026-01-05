@@ -10,14 +10,15 @@ namespace FanControl.Liquidctl
 {
     internal static class LiquidctlCLIWrapper
     {
-        public static string liquidctlexe = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "liquidctl.exe");
+        public static string liquidctlexe = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty, "liquidctl.exe");
 
         private static Dictionary<string, Process> liquidctlBackends = new Dictionary<string, Process>();
         private static bool hasLastCallFailed = false;
+        private static readonly object _lock = new object();
 
-        internal static IPluginLogger logger;
+        internal static IPluginLogger? logger;
 
-        internal static void Initialize() {
+        internal static void Initialize(IPluginLogger? pluginLogger = null) {
             logger = pluginLogger;
             LiquidctlCall($"--json initialize all");
         }
@@ -28,33 +29,46 @@ namespace FanControl.Liquidctl
         }
         internal static List<LiquidctlStatusJSON> ReadStatus(string address) {
             Process process = GetLiquidCtlBackend(address);
-            process.StandardInput.WriteLine("status");
-            string line = process.StandardOutput.ReadLine();
-            // restart if liquidctl crashed
-            if (line == null) {
-                Initialize();
-                process = RestartLiquidCtlBackend(process, address);
+            string? line;
+            lock (_lock)
+            {
                 process.StandardInput.WriteLine("status");
                 line = process.StandardOutput.ReadLine();
+            }
+            // restart if liquidctl crashed
+            if (line == null) {
+                Initialize(logger);
+                process = RestartLiquidCtlBackend(process, address);
+                lock (_lock)
+                {
+                    process.StandardInput.WriteLine("status");
+                    line = process.StandardOutput.ReadLine();
+                }
                 if (line == null) {
                     throw new Exception($"liquidctl returns empty line. Remaining stdout:\n{process.StandardOutput.ReadToEnd()} Last stderr output:\n{process.StandardError.ReadToEnd()}");
                 }
             }
             JObject result = JObject.Parse(line);
-            string status = (string)result.SelectToken("status");
+            string? status = (string?)result.SelectToken("status");
             hasLastCallFailed = false;
             if (status == "success")
-                return result.SelectToken("data").ToObject<List<LiquidctlStatusJSON>>();
-            throw new Exception((string)result.SelectToken("data"));
+                return result.SelectToken("data")?.ToObject<List<LiquidctlStatusJSON>>() ?? new List<LiquidctlStatusJSON>();
+            throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
-        internal static void SetPump(string address, int value) {
+        public static void SetPump(string address, int value) {
             Process process = GetLiquidCtlBackend(address);
-            process.StandardInput.WriteLine($"set pump speed {(value)}");
-            JObject result = JObject.Parse(process.StandardOutput.ReadLine());
-            string status = (string)result.SelectToken("status");
+            string? line;
+            lock (_lock)
+            {
+                process.StandardInput.WriteLine($"set pump speed {(value)}");
+                line = process.StandardOutput.ReadLine();
+            }
+            if (line == null) throw new Exception("liquidctl returned empty line on set pump");
+            JObject result = JObject.Parse(line);
+            string? status = (string?)result.SelectToken("status");
             if (status == "success")
                 return;
-            throw new Exception((string)result.SelectToken("data"));
+            throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
 
         internal static void SetFanNumber(string address, int index, int value) {
@@ -151,11 +165,12 @@ namespace FanControl.Liquidctl
 
             foreach (JObject statusObject in statusArray) {
                 try {
-                    LiquidctlStatusJSON status = statusObject.ToObject<LiquidctlStatusJSON>();
-                    statuses.Add(status);
+                    LiquidctlStatusJSON? status = statusObject.ToObject<LiquidctlStatusJSON>();
+                    if (status != null)
+                        statuses.Add(status);
                 }
                 catch (Exception e) {
-                    logger.Log($"Unable to parse {statusObject}\n{e.Message}");
+                    logger?.Log($"Unable to parse {statusObject}\n{e.Message}");
                 }
             }
 

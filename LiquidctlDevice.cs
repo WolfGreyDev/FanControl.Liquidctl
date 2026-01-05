@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using FanControl.Plugins;
 
 namespace FanControl.Liquidctl
@@ -16,7 +17,7 @@ namespace FanControl.Liquidctl
             }
             public void UpdateFromJSON(LiquidctlStatusJSON output)
             {
-                _value = (float)output.status.Single(entry => entry.key == "Liquid temperature").GetValueAsFloat();
+                _value = output.status.Single(entry => entry.key == "Liquid temperature").GetValueAsFloat() ?? 0f;
             }
             public string Id => _id;
             string _id;
@@ -40,7 +41,7 @@ namespace FanControl.Liquidctl
             }
             public void UpdateFromJSON(LiquidctlStatusJSON output)
             {
-                _value = (float)output.status.Single(entry => entry.key == "Pump speed").GetValueAsFloat();
+                _value = output.status.Single(entry => entry.key == "Pump speed").GetValueAsFloat() ?? 0f;
             }
             public string Id => _id;
             readonly string _id;
@@ -65,7 +66,7 @@ namespace FanControl.Liquidctl
             }
             public void UpdateFromJSON(LiquidctlStatusJSON output)
             {
-                _value = (float)output.status.Single(entry => entry.key == "Pump duty").GetValueAsFloat();
+                _value = output.status.Single(entry => entry.key == "Pump duty").GetValueAsFloat() ?? 0f;
             }
             public string Id => _id;
             string _id;
@@ -108,7 +109,7 @@ namespace FanControl.Liquidctl
             public void UpdateFromJSON(int index, LiquidctlStatusJSON output)
             {
                 string currentKey = KEY.Replace("###", index.ToString());
-                _value = (float)output.status.Single(entry => entry.key == currentKey).value;
+                _value = output.status.Single(entry => entry.key == currentKey).GetValueAsFloat() ?? 0f;
             }
 
             public static string KEY = "Fan ### speed";
@@ -146,7 +147,7 @@ namespace FanControl.Liquidctl
             public void UpdateFromJSON(int index, LiquidctlStatusJSON output)
             {
                 string currentKey = FanSpeedMultiple.KEY.Replace("###", index.ToString());
-                float reading = (float)output.status.Single(entry => entry.key == currentKey).value;
+                float reading = output.status.Single(entry => entry.key == currentKey).GetValueAsFloat() ?? 0f;
                 //_value = reading > MAX_RPM ? 100.0f : (float)Math.Ceiling(100.0f * reading / MAX_RPM);
                 _value = RPM_LOOKUP.OrderBy(e => Math.Abs(e.Key - reading)).FirstOrDefault().Value;
             }
@@ -204,14 +205,20 @@ namespace FanControl.Liquidctl
             hasPumpSpeed = output.status.Exists(entry => entry.key == "Pump speed" && !(entry.GetValueAsFloat() is null));
             if (hasPumpSpeed)
                 pumpSpeed = new PumpSpeed(output);
+            else
+                pumpSpeed = null!;
 
             hasPumpDuty = output.status.Exists(entry => entry.key == "Pump duty" && !(entry.GetValueAsFloat() is null));
             if (hasPumpDuty)
                 pumpDuty = new PumpDuty(output);
+            else
+                pumpDuty = null!;
 
             hasLiquidTemperature = output.status.Exists(entry => entry.key == "Liquid temperature" && !(entry.GetValueAsFloat() is null));
             if (hasLiquidTemperature)
                 liquidTemperature = new LiquidTemperature(output);
+            else
+                liquidTemperature = null!;
 
             // Get the info for multiple fans
             for (int i = 0; i < 20; i++)
@@ -231,6 +238,10 @@ namespace FanControl.Liquidctl
         public readonly bool hasPumpSpeed, hasPumpDuty, hasLiquidTemperature;
         public readonly bool[] hasMultipleFanSpeed = new bool[20];
 
+        public bool hasFanSpeed => hasMultipleFanSpeed[0];
+        public FanSpeedMultiple fanSpeed => fanSpeedMultiple[0]!;
+        public FanControlMultiple fanControl => fanControlMultiple[0]!;
+
         public void UpdateFromJSON(LiquidctlStatusJSON output)
         {
             if (hasLiquidTemperature) liquidTemperature.UpdateFromJSON(output);
@@ -241,8 +252,8 @@ namespace FanControl.Liquidctl
             {
                 if (hasMultipleFanSpeed[i])
                 {
-                    fanSpeedMultiple[i].UpdateFromJSON(i + 1, output);
-                    fanControlMultiple[i].UpdateFromJSON(i + 1, output);
+                    fanSpeedMultiple[i]!.UpdateFromJSON(i + 1, output);
+                    fanControlMultiple[i]!.UpdateFromJSON(i + 1, output);
                 }
             }
         }
@@ -251,15 +262,16 @@ namespace FanControl.Liquidctl
         public LiquidTemperature liquidTemperature;
         public PumpSpeed pumpSpeed;
         public PumpDuty pumpDuty;
-        public FanSpeedMultiple[] fanSpeedMultiple = new FanSpeedMultiple[20];
-        public FanControlMultiple[] fanControlMultiple = new FanControlMultiple[20];
+        public FanSpeedMultiple?[] fanSpeedMultiple = new FanSpeedMultiple?[20];
+        public FanControlMultiple?[] fanControlMultiple = new FanControlMultiple?[20];
 
         public void LoadJSON()
         {
             try
             {
-                LiquidctlStatusJSON output = LiquidctlCLIWrapper.ReadStatus(address).First();
-                UpdateFromJSON(output);
+                LiquidctlStatusJSON? output = LiquidctlCLIWrapper.ReadStatus(address).FirstOrDefault();
+                if (output != null)
+                    UpdateFromJSON(output);
             }
             catch (InvalidOperationException)
             {
@@ -267,9 +279,9 @@ namespace FanControl.Liquidctl
             }
         }
 
-        public String GetDeviceInfo()
+        public string GetDeviceInfo()
         {
-            String ret = $"Device @ {address}";
+            string ret = $"Device @ {address}";
             if (hasLiquidTemperature) ret += $", Liquid @ {liquidTemperature.Value}";
             if (hasPumpSpeed) ret += $", Pump @ {pumpSpeed.Value}";
             if (hasPumpDuty) ret += $"({pumpDuty.Value})";
@@ -279,7 +291,7 @@ namespace FanControl.Liquidctl
             {
                 if (hasMultipleFanSpeed[i])
                 {
-                    ret += $", Fan{i + 1} @ {fanSpeedMultiple[i].Value} ({fanControlMultiple[i].Value})";
+                    ret += $", Fan{i + 1} @ {fanSpeedMultiple[i]!.Value} ({fanControlMultiple[i]!.Value})";
                 }
             }
 
