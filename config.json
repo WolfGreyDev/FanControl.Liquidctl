@@ -1,0 +1,4 @@
+{
+    "_comment": "LogLevel options: Error, Info (Startup/Major), Debug (Commands), Trace (Sensors)",
+    "LogLevel": "Info"
+}

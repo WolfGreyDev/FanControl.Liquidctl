@@ -66,7 +66,7 @@ namespace FanControl.Liquidctl
             }
             public void UpdateFromJSON(LiquidctlStatusJSON output)
             {
-                _value = output.status.Single(entry => entry.key == "Pump duty").GetValueAsFloat() ?? 0f;
+                _value = output.status.FirstOrDefault(entry => entry.key == "Pump duty")?.GetValueAsFloat() ?? 0f;
             }
             public string Id => _id;
             string _id;
@@ -143,13 +143,33 @@ namespace FanControl.Liquidctl
 
             }
 
-            // We can only estimate, as it is not provided in any output
+            // Try to get reported duty cycle, fallback to estimation if not available
             public void UpdateFromJSON(int index, LiquidctlStatusJSON output)
             {
-                string currentKey = FanSpeedMultiple.KEY.Replace("###", index.ToString());
-                float reading = output.status.Single(entry => entry.key == currentKey).GetValueAsFloat() ?? 0f;
-                //_value = reading > MAX_RPM ? 100.0f : (float)Math.Ceiling(100.0f * reading / MAX_RPM);
-                _value = RPM_LOOKUP.OrderBy(e => Math.Abs(e.Key - reading)).FirstOrDefault().Value;
+                string dutyKey = $"Fan {index} duty";
+                var dutyRecord = output.status.FirstOrDefault(entry => entry.key == dutyKey);
+                
+                if (dutyRecord != null)
+                {
+                    float newValue = dutyRecord.GetValueAsFloat() ?? 0f;
+                    if (newValue != _value)
+                    {
+                        LiquidctlCLIWrapper.Log($"{_name} (reported duty): {_value}% -> {newValue}%", LogLevel.Trace);
+                    }
+                    _value = newValue;
+                }
+                else
+                {
+                    // Fallback to estimation for devices that don't report duty
+                    string speedKey = FanSpeedMultiple.KEY.Replace("###", index.ToString());
+                    float reading = output.status.Single(entry => entry.key == speedKey).GetValueAsFloat() ?? 0f;
+                    float newValue = RPM_LOOKUP.OrderBy(e => Math.Abs(e.Key - reading)).FirstOrDefault().Value;
+                    if (newValue != _value)
+                    {
+                        LiquidctlCLIWrapper.Log($"{_name} (estimated duty from {reading} RPM): {_value}% -> {newValue}%", LogLevel.Trace);
+                    }
+                    _value = newValue;
+                }
             }
 
             public static string KEY = "Fan ### speed";
@@ -241,6 +261,8 @@ namespace FanControl.Liquidctl
         public bool hasFanSpeed => hasMultipleFanSpeed[0];
         public FanSpeedMultiple fanSpeed => fanSpeedMultiple[0]!;
         public FanControlMultiple fanControl => fanControlMultiple[0]!;
+
+        public bool HasAnySensors => hasPumpSpeed || hasPumpDuty || hasLiquidTemperature || hasMultipleFanSpeed.Any(x => x);
 
         public void UpdateFromJSON(LiquidctlStatusJSON output)
         {

@@ -17,7 +17,11 @@ namespace FanControl.Liquidctl
         private static readonly object _lock = new object();
 
         internal static IPluginLogger? logger;
-        private static void Log(string message) => logger?.Log($"[Liquidctl] {message}");
+        internal static void Log(string message, LogLevel level = LogLevel.Info) {
+            if (level <= LiquidctlConfig.Instance.LogLevel) {
+                logger?.Log($"[Liquidctl] {message}");
+            }
+        }
 
         internal static void Initialize(IPluginLogger? pluginLogger = null) {
             logger = pluginLogger;
@@ -62,6 +66,7 @@ namespace FanControl.Liquidctl
             string? line;
             lock (_lock)
             {
+                Log($"Setting pump speed: {value}", LogLevel.Debug);
                 process.StandardInput.WriteLine($"set pump speed {(value)}");
                 line = process.StandardOutput.ReadLine();
             }
@@ -74,7 +79,20 @@ namespace FanControl.Liquidctl
         }
 
         internal static void SetFanNumber(string address, int index, int value) {
-            LiquidctlCall($"--address {address} set fan{index} speed {(value)}");
+            Process process = GetLiquidCtlBackend(address);
+            string? line;
+            lock (_lock)
+            {
+                Log($"Setting fan{index} speed: {value}", LogLevel.Debug);
+                process.StandardInput.WriteLine($"set fan{index} speed {(value)}");
+                line = process.StandardOutput.ReadLine();
+            }
+            if (line == null) throw new Exception($"liquidctl returned empty line on set fan{index}");
+            JObject result = JObject.Parse(line);
+            string? status = (string?)result.SelectToken("status");
+            if (status == "success")
+                return;
+            throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
         private static Process RestartLiquidCtlBackend(Process oldProcess, string address)
         {
@@ -144,7 +162,7 @@ namespace FanControl.Liquidctl
             process.StartInfo.FileName = liquidctlexe;
             process.StartInfo.Arguments = arguments;
 
-            Log($"Executing liquidctl call: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
+            // Log($"Executing liquidctl call: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
             process.Start();
             process.WaitForExit();
 
@@ -152,10 +170,12 @@ namespace FanControl.Liquidctl
                 // try to initialize again
                 if (process.ExitCode == 1 && !hasLastCallFailed) {
                     hasLastCallFailed = true;
-                    Initialize();
+                    Initialize(logger);
                     return LiquidctlCall(arguments);
                 }
-                throw new Exception($"liquidctl returned non-zero exit code {process.ExitCode}. Last stderr output:\n{process.StandardError.ReadToEnd()}");
+                string stderr = process.StandardError.ReadToEnd();
+                Log($"liquidctl returned non-zero exit code {process.ExitCode}. Arguments: {arguments}. Stderr:\n{stderr}", LogLevel.Error);
+                throw new Exception($"liquidctl returned non-zero exit code {process.ExitCode}. Last stderr output:\n{stderr}");
             }
 
             hasLastCallFailed = false;
@@ -178,7 +198,7 @@ namespace FanControl.Liquidctl
                         statuses.Add(status);
                 }
                 catch (Exception e) {
-                    Log($"Unable to parse {statusObject}\n{e.Message}");
+                    Log($"Unable to parse {statusObject}\n{e.Message}", LogLevel.Error);
                 }
             }
 
