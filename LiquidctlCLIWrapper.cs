@@ -13,6 +13,7 @@ namespace FanControl.Liquidctl
         public static string liquidctlexe = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? string.Empty, "liquidctl.exe");
 
         private static Dictionary<string, Process> liquidctlBackends = new Dictionary<string, Process>();
+        private static Dictionary<string, int> lastSetValues = new Dictionary<string, int>();
         private static bool hasLastCallFailed = false;
         private static readonly object _lock = new object();
 
@@ -25,6 +26,7 @@ namespace FanControl.Liquidctl
 
         internal static void Initialize(IPluginLogger? pluginLogger = null) {
             logger = pluginLogger;
+            lastSetValues.Clear();
             Log("Initializing all liquidctl devices...");
             LiquidctlCall($"--json initialize all");
         }
@@ -62,6 +64,10 @@ namespace FanControl.Liquidctl
             throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
         public static void SetPump(string address, int value) {
+            string key = $"{address}-pump";
+            if (lastSetValues.TryGetValue(key, out int lastValue) && lastValue == value)
+                return;
+
             Process process = GetLiquidCtlBackend(address);
             string? line;
             lock (_lock)
@@ -74,11 +80,18 @@ namespace FanControl.Liquidctl
             JObject result = JObject.Parse(line);
             string? status = (string?)result.SelectToken("status");
             if (status == "success")
+            {
+                lastSetValues[key] = value;
                 return;
+            }
             throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
 
         internal static void SetFanNumber(string address, int index, int value) {
+            string key = $"{address}-fan{index}";
+            if (lastSetValues.TryGetValue(key, out int lastValue) && lastValue == value)
+                return;
+
             Process process = GetLiquidCtlBackend(address);
             string? line;
             lock (_lock)
@@ -91,7 +104,10 @@ namespace FanControl.Liquidctl
             JObject result = JObject.Parse(line);
             string? status = (string?)result.SelectToken("status");
             if (status == "success")
+            {
+                lastSetValues[key] = value;
                 return;
+            }
             throw new Exception((string?)result.SelectToken("data") ?? "Unknown error");
         }
         private static Process RestartLiquidCtlBackend(Process oldProcess, string address)
