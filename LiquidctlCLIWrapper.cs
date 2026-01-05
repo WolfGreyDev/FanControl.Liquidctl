@@ -17,9 +17,11 @@ namespace FanControl.Liquidctl
         private static readonly object _lock = new object();
 
         internal static IPluginLogger? logger;
+        private static void Log(string message) => logger?.Log($"[Liquidctl] {message}");
 
         internal static void Initialize(IPluginLogger? pluginLogger = null) {
             logger = pluginLogger;
+            Log("Initializing all liquidctl devices...");
             LiquidctlCall($"--json initialize all");
         }
         internal static List<LiquidctlStatusJSON> ReadStatus() {
@@ -74,13 +76,17 @@ namespace FanControl.Liquidctl
         internal static void SetFanNumber(string address, int index, int value) {
             LiquidctlCall($"--address {address} set fan{index} speed {(value)}");
         }
-
-        private static Process RestartLiquidCtlBackend(Process oldProcess, string address) {
+        private static Process RestartLiquidCtlBackend(Process oldProcess, string address)
+        {
+            Log($"Restarting liquidctl backend for {address}");
             liquidctlBackends.Remove(address);
-            try {
+            try
+            {
                 oldProcess.StandardInput.WriteLine("exit");
                 oldProcess.WaitForExit(200);
-            } catch (Exception) {
+            }
+            catch (Exception)
+            {
                 if (!oldProcess.HasExited)
                     oldProcess.Kill();
             }
@@ -120,6 +126,7 @@ namespace FanControl.Liquidctl
 
             liquidctlBackends.Add(address, process);
 
+            Log($"Starting liquidctl interactive process: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
             process.Start();
 
             return process;
@@ -137,6 +144,7 @@ namespace FanControl.Liquidctl
             process.StartInfo.FileName = liquidctlexe;
             process.StartInfo.Arguments = arguments;
 
+            Log($"Executing liquidctl call: {process.StartInfo.FileName} {process.StartInfo.Arguments}");
             process.Start();
             process.WaitForExit();
 
@@ -170,7 +178,7 @@ namespace FanControl.Liquidctl
                         statuses.Add(status);
                 }
                 catch (Exception e) {
-                    logger?.Log($"Unable to parse {statusObject}\n{e.Message}");
+                    Log($"Unable to parse {statusObject}\n{e.Message}");
                 }
             }
 
